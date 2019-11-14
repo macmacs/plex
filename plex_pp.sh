@@ -1,48 +1,54 @@
-#! /bin/bash
-#
+#!/usr/bin/env bash
 # Plex DVR Postprocessing
-# Version 0.0.1
-# twitter.com/thatvirtualboy
-# www.thatvirtualboy.com
+# Version 0.0.2
+# macmacs
 #
+# Dependencies:
+#   ts -->  apt install moreutils
 
-# FIRST, RUN COMCUT TO REMOVE COMMERCIALS, THEN TRANSCODE AND COMPRESS
+# TRANSCODE AND COMPRESS
 
-lockFile='/tmp/dvrProcessing.lock'
-inFile="$1"
-tmpFile="$1.mp4"
-dvrPostLog='/tmp/dvrProcessing.log'
-time=`date '+%Y-%m-%d %H:%M:%S'`
-handbrake=/PATH/TO/YOUR/INSTALL (mine is /usr/bin/HandBrakeCLI)
-cut=/PATH/TO/YOUR/COMCUT/INSTALL (mine is /home/ryan/comchap/comcut)
+LOCK_FILE='/tmp/dvrProcessing.lock'
+INPUT_FILE="$1"
+TMP_FILE=$(mktemp)
+LOG_FILE='/tmp/dvrProcessing.log'
+HANDBRAKE_CLI=`which HandBrakeCLI`
 
-echo "'$time' Plex DVR Postprocessing script started" | tee $dvrPostLog
+
+rm -f ${LOG_FILE}
+log() {
+  echo "$@" | ts | tee -a ${LOG_FILE}
+}
+
+if [[ -z ${HANDBRAKE_CLI} ]]; then
+  log "Handbrake CLI not installed! Aborting ..."
+  exit 1
+fi
+
+log "PLEX DVR Postprocessing script started"
 
 # Check if post processing is already running
-while [ -f $lockFile ]
+while [[ -f ${LOCK_FILE} ]]
 do
-    echo "'$time' $lockFile' exists, sleeping processing of '$inFile'" | tee -a $dvrPostLog
+    log "$LOCK_FILE' exists, sleeping processing of '$INPUT_FILE'"
     sleep 10
 done
 
 # Create lock file to prevent other post-processing from running simultaneously
-echo "'$time' Creating lock file for processing '$inFile'" | tee -a $dvrPostLog
-touch $lockFile
-
-# Run comcut
-echo "'$time' Comcut started on '$inFile'" | tee -a $dvrPostLog
-$cut "$inFile"
+log "Creating lock file for processing '$INPUT_FILE'"
+touch ${LOCK_FILE}
 
 # Encode file to MP4 with handbrake-cli
-echo "'$time' Transcoding started on '$inFile'" | tee -a $dvrPostLog
-$handbrake -i "$inFile" -o "$tmpFile" --preset="Apple 1080p30 Surround" --encoder-preset="veryfast" -O
+log "Transcoding started on '$INPUT_FILE'"
+${HANDBRAKE_CLI} -i "$INPUT_FILE" -o "$TMP_FILE" --preset="H.264 MKV 576p25" --encoder-preset="veryfast" -O
 
 # Overwrite original ts file with the transcoded file
-echo "'$time' File rename started" | tee -a $dvrPostLog
-mv -f "$tmpFile" "$inFile"
+log "File rename started"
+mv -f "$TMP_FILE" "${INPUT_FILE}.mkv"
+rm -f "${INPUT_FILE}"
 
 #Remove lock file
-echo "'$time' All done! Removing lock for '$inFile'" | tee -a $dvrPostLog
-rm $lockFile
+log "All done! Removing lock for '$INPUT_FILE'"
+rm -f ${LOCK_FILE}
 
 exit 0
